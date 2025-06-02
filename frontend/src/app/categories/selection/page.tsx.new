@@ -1,0 +1,478 @@
+'use client';
+
+import React, { useState, useEffect } from 'react';
+import NextLink from 'next/link';
+import { motion, Variants } from 'framer-motion';
+import { 
+  Box, Container, Heading, Text, Grid, GridItem, 
+  Image, Link, useBreakpointValue, keyframes,
+  Flex, Badge, useColorModeValue, VStack, HStack,
+  Spinner, useToast, Button, Alert, AlertIcon
+} from '@chakra-ui/react';
+import { fetchData } from '@/utils/api';
+
+// Interface for API category data
+interface APICategory {
+  _id: string;
+  name: string;
+  slug: string;
+  description: string;
+  image: string;
+  featured?: boolean;
+  itemCount?: number;
+  newItems?: number;
+}
+
+// Enhanced category interface with UI-specific properties
+interface Category extends APICategory {
+  accent: string;
+  featured: boolean;
+  itemCount: number;
+  newItems: number;
+}
+
+// Props for the CategoryTile component
+interface CategoryTileProps {
+  category: Category;
+  index: number;
+  columns: number;
+}
+
+// Mapping of category slugs to accent colors
+const categoryAccents: Record<string, string> = {
+  watches: 'purple.500',
+  jewelry: 'yellow.400',
+  bags: 'red.500',
+  accessories: 'blue.400',
+  clothing: 'green.500',
+  shoes: 'orange.400',
+  default: 'gray.400'
+};
+
+// Fallback categories in case API fails
+const fallbackCategories: Category[] = [
+  {
+    _id: '1',
+    name: 'Luxury Watches',
+    slug: 'watches',
+    description: 'Exquisite timepieces from renowned brands',
+    image: 'https://images.unsplash.com/photo-1523170335258-f5ed11844a49?ixlib=rb-4.0.3&ixid=MnwxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8&auto=format&fit=crop&w=1180&q=80',
+    accent: categoryAccents.watches,
+    featured: true,
+    itemCount: 42,
+    newItems: 8
+  },
+  {
+    _id: '2',
+    name: 'Fine Jewelry',
+    slug: 'jewelry',
+    description: 'Stunning pieces that capture elegance',
+    image: 'https://images.unsplash.com/photo-1535632066927-ab7c9ab60908?ixlib=rb-4.0.3&ixid=MnwxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8&auto=format&fit=crop&w=1160&q=80',
+    accent: categoryAccents.jewelry,
+    featured: true,
+    itemCount: 36,
+    newItems: 5
+  },
+  {
+    _id: '3',
+    name: 'Designer Bags',
+    slug: 'bags',
+    description: 'Premium handbags and accessories',
+    image: 'https://images.unsplash.com/photo-1584917865442-de89df76afd3?ixlib=rb-4.0.3&ixid=MnwxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8&auto=format&fit=crop&w=1035&q=80',
+    accent: categoryAccents.bags,
+    featured: false,
+    itemCount: 28,
+    newItems: 3
+  },
+  {
+    _id: '4',
+    name: 'Fashion Accessories',
+    slug: 'accessories',
+    description: 'Complete your look with our accessories',
+    image: 'https://images.unsplash.com/photo-1611923134239-b9be5816e23c?ixlib=rb-4.0.3&ixid=MnwxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8&auto=format&fit=crop&w=1160&q=80',
+    accent: categoryAccents.accessories,
+    featured: false,
+    itemCount: 53,
+    newItems: 12
+  },
+  {
+    _id: '5',
+    name: 'Luxury Clothing',
+    slug: 'clothing',
+    description: 'Premium apparel from top designers',
+    image: 'https://images.unsplash.com/photo-1445205170230-053b83016050?ixlib=rb-4.0.3&ixid=MnwxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8&auto=format&fit=crop&w=1171&q=80',
+    accent: categoryAccents.clothing,
+    featured: false,
+    itemCount: 45,
+    newItems: 7
+  },
+  {
+    _id: '6',
+    name: 'Designer Shoes',
+    slug: 'shoes',
+    description: 'Step out in style with our footwear collection',
+    image: 'https://images.unsplash.com/photo-1543163521-1bf539c55dd2?ixlib=rb-4.0.3&ixid=MnwxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8&auto=format&fit=crop&w=1160&q=80',
+    accent: categoryAccents.shoes,
+    featured: false,
+    itemCount: 32,
+    newItems: 4
+  }
+];
+
+// Shimmer animation for category tiles
+const shimmer = keyframes`
+  0% { background-position: -1000px 0; }
+  100% { background-position: 1000px 0; }
+`;
+
+// Animation variants for category tiles
+const itemVariants: Variants = {
+  hidden: { opacity: 0, y: 20 },
+  visible: (i: number) => ({
+    opacity: 1,
+    y: 0,
+    transition: {
+      delay: i * 0.1,
+      duration: 0.5,
+      ease: 'easeOut'
+    }
+  })
+};
+
+// Category tile component
+const CategoryTile: React.FC<CategoryTileProps> = ({ category, index, columns }) => {
+  const bgColor = useColorModeValue('white', 'gray.800');
+  const textColor = useColorModeValue('gray.800', 'white');
+  const shimmerBg = useColorModeValue(
+    `linear-gradient(to right, ${bgColor}00, ${bgColor}20, ${bgColor}00)`,
+    `linear-gradient(to right, ${bgColor}00, ${bgColor}20, ${bgColor}00)`
+  );
+  
+  // Calculate grid span based on featured status
+  const colSpan = category.featured ? Math.min(2, columns) : 1;
+  const rowSpan = category.featured ? 2 : 1;
+  
+  return (
+    <GridItem 
+      colSpan={colSpan} 
+      rowSpan={rowSpan}
+      as={motion.div}
+      custom={index}
+      variants={itemVariants}
+      initial="hidden"
+      animate="visible"
+      whileHover={{ 
+        scale: 1.03, 
+        boxShadow: "0 20px 25px -5px rgba(0, 0, 0, 0.2), 0 10px 10px -5px rgba(0, 0, 0, 0.1)" 
+      }}
+      position="relative"
+      overflow="hidden"
+      borderRadius="xl"
+      boxShadow="xl"
+      height={category.featured ? "400px" : "300px"}
+    >
+      <NextLink href={`/categories/${category.slug}`} passHref>
+        <Link _hover={{ textDecoration: 'none' }} height="100%" display="block">
+          <Box position="relative" height="100%" width="100%">
+            {/* Background Image */}
+            <Image 
+              src={category.image} 
+              alt={category.name}
+              objectFit="cover"
+              width="100%"
+              height="100%"
+              transition="transform 0.5s"
+              _groupHover={{ transform: 'scale(1.05)' }}
+            />
+            
+            {/* Gradient Overlay */}
+            <Box
+              position="absolute"
+              top={0}
+              left={0}
+              right={0}
+              bottom={0}
+              bgGradient={`linear(to-t, blackAlpha.800, transparent)`}
+            />
+            
+            {/* Content */}
+            <Box
+              position="absolute"
+              bottom={0}
+              left={0}
+              right={0}
+              p={6}
+            >
+              {category.featured && (
+                <Badge 
+                  colorScheme="yellow" 
+                  mb={2}
+                  px={2}
+                  py={1}
+                  borderRadius="full"
+                >
+                  Featured
+                </Badge>
+              )}
+              <Heading 
+                as="h3" 
+                size="lg" 
+                color="white"
+                mb={2}
+                fontFamily="'Playfair Display', serif"
+              >
+                {category.name}
+              </Heading>
+              <Text 
+                fontSize="md" 
+                color="whiteAlpha.800"
+                mb={3}
+                noOfLines={2}
+              >
+                {category.description}
+              </Text>
+              <Flex justify="space-between" align="center">
+                <HStack>
+                  <Badge colorScheme="purple" px={2} py={1} borderRadius="full">
+                    {category.itemCount} items
+                  </Badge>
+                  {category.newItems > 0 && (
+                    <Badge colorScheme="green" px={2} py={1} borderRadius="full">
+                      {category.newItems} new
+                    </Badge>
+                  )}
+                </HStack>
+                <Box 
+                  as="span" 
+                  fontSize="sm" 
+                  color="white"
+                  bg={category.accent}
+                  px={3}
+                  py={1}
+                  borderRadius="full"
+                  fontWeight="bold"
+                  _hover={{ opacity: 0.8 }}
+                  transition="all 0.3s"
+                >
+                  Explore
+                </Box>
+              </Flex>
+            </Box>
+            
+            {/* Shimmer Effect */}
+            <Box
+              position="absolute"
+              top={0}
+              left={0}
+              right={0}
+              height="100%"
+              background={shimmerBg}
+              backgroundSize="1000px 100%"
+              animation={`${shimmer} 2s infinite linear`}
+              opacity={0.3}
+              pointerEvents="none"
+            />
+          </Box>
+        </Link>
+      </NextLink>
+    </GridItem>
+  );
+};
+
+// Main component
+const CategorySelectionPage: React.FC = () => {
+  const [mounted, setMounted] = useState<boolean>(false);
+  const [categories, setCategories] = useState<Category[]>([]);
+  const [loading, setLoading] = useState<boolean>(true);
+  const [error, setError] = useState<string | null>(null);
+  const columns = useBreakpointValue({ base: 1, sm: 2, md: 3, lg: 4 }) || 1;
+  const toast = useToast();
+  
+  // Background gradient
+  const bgGradient = useColorModeValue(
+    'linear(to-br, gray.900, purple.900, gray.900)',
+    'linear(to-br, gray.900, purple.900, gray.900)'
+  );
+  
+  // Fetch categories on mount
+  useEffect(() => {
+    setMounted(true);
+    
+    const fetchCategories = async (): Promise<void> => {
+      setLoading(true);
+      try {
+        // Attempt to fetch from API
+        const endpoint = '/api/categories';
+        const response = await fetchData(endpoint);
+        
+        // Process API data
+        const enhancedCategories: Category[] = response.categories.map((cat: APICategory) => ({
+          ...cat,
+          accent: categoryAccents[cat.slug] || categoryAccents.default,
+          featured: cat.featured || false,
+          itemCount: cat.itemCount || 0,
+          newItems: cat.newItems || 0
+        }));
+        
+        setCategories(enhancedCategories);
+        setError(null);
+      } catch (err) {
+        console.error('Failed to fetch categories:', err);
+        setError('Unable to load categories from server. Showing fallback data.');
+        setCategories(fallbackCategories);
+        
+        // Show error toast
+        toast({
+          title: 'Error loading categories',
+          description: 'Using fallback data. Please try again later.',
+          status: 'error',
+          duration: 5000,
+          isClosable: true,
+        });
+      } finally {
+        setLoading(false);
+      }
+    };
+    
+    fetchCategories();
+  }, [toast]);
+  
+  // Handle retry
+  const handleRetry = (): void => {
+    window.location.reload();
+  };
+  
+  // Create a masonry-style grid layout
+  const createMasonryGrid = () => {
+    // Sort categories to place featured items first
+    const sortedCategories = [...categories].sort((a, b) => {
+      if (a.featured && !b.featured) return -1;
+      if (!a.featured && b.featured) return 1;
+      return 0;
+    });
+    
+    return (
+      <Grid
+        templateColumns={`repeat(${columns}, 1fr)`}
+        gap={6}
+        px={4}
+        py={8}
+        maxW="1400px"
+        mx="auto"
+      >
+        {sortedCategories.map((category, index) => (
+          <CategoryTile 
+            key={category._id} 
+            category={category} 
+            index={index} 
+            columns={columns} 
+          />
+        ))}
+      </Grid>
+    );
+  };
+  
+  // Loading state
+  if (loading) {
+    return (
+      <Box 
+        minH="100vh" 
+        bgGradient={bgGradient}
+        color="white" 
+        display="flex"
+        alignItems="center"
+        justifyContent="center"
+      >
+        <VStack spacing={6}>
+          <Spinner 
+            size="xl" 
+            thickness="4px"
+            speed="0.65s"
+            color="purple.500"
+            emptyColor="gray.700"
+          />
+          <Text fontSize="lg" fontFamily="'Inter', sans-serif">Loading collections...</Text>
+        </VStack>
+      </Box>
+    );
+  }
+  
+  // Main render
+  return (
+    <Box 
+      minH="100vh" 
+      bgGradient={bgGradient}
+      color="white" 
+      py={8} 
+      px={4}
+      overflow="hidden"
+      position="relative"
+    >
+      {/* Background decorative elements */}
+      <Box 
+        position="absolute" 
+        top="-10%" 
+        right="-10%" 
+        width="500px" 
+        height="500px" 
+        borderRadius="full" 
+        bg="purple.900" 
+        filter="blur(120px)" 
+        opacity="0.3" 
+        zIndex={0} 
+      />
+      <Box 
+        position="absolute" 
+        bottom="-10%" 
+        left="-10%" 
+        width="600px" 
+        height="600px" 
+        borderRadius="full" 
+        bg="blue.900" 
+        filter="blur(130px)" 
+        opacity="0.2" 
+        zIndex={0} 
+      />
+      
+      {/* Page content */}
+      <Container maxW="container.xl" position="relative" zIndex={1}>
+        <VStack spacing={10} align="center" mb={12}>
+          <Heading 
+            as="h1" 
+            size="2xl" 
+            textAlign="center"
+            fontFamily="'Playfair Display', serif"
+            fontWeight="bold"
+            bgGradient="linear(to-r, yellow.400, purple.500)"
+            bgClip="text"
+          >
+            Explore Our Collections
+          </Heading>
+          <Text 
+            fontSize="xl" 
+            textAlign="center" 
+            maxW="800px"
+            color="whiteAlpha.800"
+            fontFamily="'Inter', sans-serif"
+          >
+            Discover our curated selection of luxury replicas, meticulously crafted to capture the essence of iconic designs.
+          </Text>
+          
+          {error && (
+            <Alert status="warning" borderRadius="md" maxW="container.md">
+              <AlertIcon />
+              <Text>{error}</Text>
+              <Button ml="auto" size="sm" colorScheme="purple" onClick={handleRetry}>
+                Retry
+              </Button>
+            </Alert>
+          )}
+        </VStack>
+        
+        {mounted && createMasonryGrid()}
+      </Container>
+    </Box>
+  );
+};
+
+export default CategorySelectionPage;
